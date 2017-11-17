@@ -14,13 +14,13 @@ def state_transition_from_direction(d):
         if d == 0:
             return (0, 0)
         elif d == 1:
-            return (1, 0)
-        elif d == 2:
             return (0, 1)
-        elif d == 3:
+        elif d == 2:
             return (-1, 0)
+        elif d == 3:
+            return (0, -1)
         else:
-            return (-1, -1)
+            return (1, 0)
 
 def get_transition(action):
     '''
@@ -36,12 +36,12 @@ def get_transition(action):
         raise ValueError('Unsupported action, got {}'.format(action))
         return (0, 0, 0, 0)
     else:
-        st1 = state_transition_from_direction(a / 5)
-        st2 = state_transition_from_direction(a % 5)
+        st1 = state_transition_from_direction(action / 5)
+        st2 = state_transition_from_direction(action % 5)
         return np.array([st1[0], st1[1], st2[0], st2[1]])
 
 def load_mnist():
-    with open('/home/siavash/personal/gym-mnist-pair/gym_mnist_pair/envs/train-images-idx3-ubyte', 'rb') as file:
+    with open('gym_mnist_pair/envs/train-images-idx3-ubyte', 'rb') as file:
         magic, size, rows, cols = struct.unpack(">IIII", file.read(16))
         if magic != 2051:
             raise ValueError('Magic number mismatch, expected 2051, got {}'.format(magic))
@@ -62,22 +62,34 @@ def makeTransMnist(image, inLength, outLength):
     transNist[topLeft[0]:topLeft[0]+inLength, topLeft[1]:topLeft[1]+inLength] = image
     return transNist
 
-def render_image(image, block, length, threshold):
-    render = ''
-    for i in range(image.shape[0]):
-        for j in range(image.shape[1]):
-            if image[i, j] > threshold:
-                if i >= block[0] and block[0] + length > i and j >= block[1] and block[1] + length > j:
-                    render += "\x1b[1;%dm" % (30+1) + '@' + "\x1b[0m"
-                else:
-                    render += '@'
+def line_render(render, row, column, image, corner, length, threshold):
+    if row >= 0 and row < image.shape[0]:
+        if column < image.shape[1] and image[row, column] > threshold:
+            if row >= corner[0] and corner[0] + length > row and column >= corner[1] and corner[1] + length > column:
+                render += "\x1b[1;%dm" % (30+1) + '@' + "\x1b[0m"
             else:
-                if i >= block[0] and block[0] + length > i and j >= block[1] and block[1] + length > j:
-                    render += "\x1b[1;%dm" % (30+1) + '.' + "\x1b[0m"
-                else:
-                    render += '.'
+                render += '@'
+        elif column < image.shape[1] and image[row, column] <= threshold:
+            if row >= corner[0] and corner[0] + length > row and column >= corner[1] and corner[1] + length > column:
+                render += "\x1b[1;%dm" % (30+1) + '.' + "\x1b[0m"
+            else:
+                render += '.'
+        else:
+            render += ' '
+    return render
+
+def render_pairs(image1, image2, state, length, threshold, separator):
+    render = ''
+    for i in range(max(image1.shape[0], image2.shape[0])):
+        for j in range(image1.shape[1] + image2.shape[1] + 1):
+            if j < image1.shape[1]:
+                render = line_render(render, i, j, image1, state[0:2], length, threshold)
+            if j == image1.shape[1]:
+                render += separator
+            if j > image1.shape[1]:
+                render = line_render(render, i, j - image1.shape[1] - 1, image2, state[2:4], length, threshold)
         render += '\n'
-        return render
+    return render
 
 class MnistPairEnv(gym.Env):
     metadata = {'render.modes': ['human']}
@@ -90,16 +102,16 @@ class MnistPairEnv(gym.Env):
         self.state = np.array([0, 0, 0, 0]) # format (top_left_1_x, top_left_1_y, top_left_2_x, top_left_2_y)
         self.total_episode_steps = 100
         self.current_step = 0
-        self.pair1 = np.zeros((self.out_image_length, self.out_image_length))
-        self.pair2 = np.zeros((self.out_image_length, self.out_image_length))
+        self.pair1 = makeTransMnist(self.mnist[0, :], self.in_image_length, self.out_image_length)
+        self.pair2 = makeTransMnist(self.mnist[0, :], self.in_image_length, self.out_image_length)
 
     def _step(self, action):
         self.state += get_transition(action)
         self.current_step += 1
-        np.clip(self.state, 0, self.out_image_length - self.in_image_length)
+        np.clip(self.state, 0, self.out_image_length - self.in_image_length, out=self.state)
 
-        crop1 = image_pair_1[self.state[0]:self.state[0]+self.in_image_length, self.state[1]:self.state[0]+self.in_image_length]
-        crop2 = image_pair_2[self.state[2]:self.state[2]+self.in_image_length, self.state[3]:self.state[3]+self.in_image_length]
+        crop1 = self.pair1[self.state[0]:self.state[0]+self.in_image_length, self.state[1]:self.state[1]+self.in_image_length]
+        crop2 = self.pair2[self.state[2]:self.state[2]+self.in_image_length, self.state[3]:self.state[3]+self.in_image_length]
 
         reward = np.corrcoef(crop1.ravel(), crop2.ravel())[0, 1]
         return self.state, reward, self.current_step >= self.total_episode_steps, {}
@@ -112,5 +124,4 @@ class MnistPairEnv(gym.Env):
         self.current_step = 0
 
     def _render(self, mode='human', close=False):
-        print render_image(self.pair1, self.state[0:2], self.in_image_length, 0)
-        print render_image(self.pair2, self.state[2:4], self.in_image_length, 0)
+        print render_pairs(self.pair1, self.pair2, self.state, self.in_image_length, 0, '|')
