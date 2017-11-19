@@ -3,6 +3,7 @@ from gym import error, spaces, utils
 from gym.utils import seeding
 import struct
 from array import array
+import os
 import numpy as np
 
 def state_transition_from_direction(d):
@@ -41,7 +42,8 @@ def get_transition(action):
         return np.array([st1[0], st1[1], st2[0], st2[1]])
 
 def load_mnist():
-    with open('gym_mnist_pair/envs/train-images-idx3-ubyte', 'rb') as file:
+    path_to_mnist = os.environ['MNIST_TRAIN_PATH']
+    with open(path_to_mnist, 'rb') as file:
         magic, size, rows, cols = struct.unpack(">IIII", file.read(16))
         if magic != 2051:
             raise ValueError('Magic number mismatch, expected 2051, got {}'.format(magic))
@@ -104,9 +106,11 @@ class MnistPairEnv(gym.Env):
         self.current_step = 0
         self.pair1 = makeTransMnist(self.mnist[0, :], self.in_image_length, self.out_image_length)
         self.pair2 = makeTransMnist(self.mnist[0, :], self.in_image_length, self.out_image_length)
+        self.action_space = spaces.Discrete(25)
+        self.observation_space = spaces.Discrete((self.out_image_length - self.in_image_length + 1) ** 2)
 
     def _step(self, action):
-        self.state += get_transition(action)
+        self.state += get_transition(action.item())
         self.current_step += 1
         np.clip(self.state, 0, self.out_image_length - self.in_image_length, out=self.state)
 
