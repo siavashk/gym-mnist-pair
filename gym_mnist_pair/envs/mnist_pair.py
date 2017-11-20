@@ -4,6 +4,7 @@ from gym.utils import seeding
 import struct
 from array import array
 import os
+import math
 import numpy as np
 
 def state_transition_from_direction(d):
@@ -118,6 +119,8 @@ class MnistPairEnv(gym.Env):
         crop2 = self.pair2[self.state[2]:self.state[2]+self.in_image_length, self.state[3]:self.state[3]+self.in_image_length]
 
         reward = np.corrcoef(crop1.ravel(), crop2.ravel())[0, 1]
+        if math.isnan(reward):
+            reward = -0.1
         return self.state, reward, self.current_step >= self.total_episode_steps, {}
 
     def _reset(self):
@@ -126,6 +129,7 @@ class MnistPairEnv(gym.Env):
         self.pair1 = makeTransMnist(self.mnist[idx, :], self.in_image_length, self.out_image_length)
         self.pair2 = makeTransMnist(self.mnist[idx, :], self.in_image_length, self.out_image_length)
         self.current_step = 0
+        return self.state, self.pair1, self.pair2
 
     def _render(self, mode='human', close=False):
         print render_pairs(self.pair1, self.pair2, self.state, self.in_image_length, 0, '|')
