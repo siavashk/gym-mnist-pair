@@ -101,3 +101,5 @@ ENV/
 .mypy_cache/
 
 gym_mnist_pair/envs/train-images-idx3-ubyte
+
+data/*

@@ -1,5 +1,7 @@
 import gym
 from gym import error, spaces, utils
+import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
 from gym.utils import seeding
 import struct
 from array import array
@@ -38,7 +40,7 @@ def get_transition(action):
         raise ValueError('Unsupported action, got {}'.format(action))
         return (0, 0, 0, 0)
     else:
-        st1 = state_transition_from_direction(action / 5)
+        st1 = state_transition_from_direction(action // 5)
         st2 = state_transition_from_direction(action % 5)
         return np.array([st1[0], st1[1], st2[0], st2[1]])
 
@@ -65,35 +67,6 @@ def makeTransMnist(image, inLength, outLength):
     transNist[topLeft[0]:topLeft[0]+inLength, topLeft[1]:topLeft[1]+inLength] = image
     return transNist
 
-def line_render(render, row, column, image, corner, length, threshold):
-    if row >= 0 and row < image.shape[0]:
-        if column < image.shape[1] and image[row, column] > threshold:
-            if row >= corner[0] and corner[0] + length > row and column >= corner[1] and corner[1] + length > column:
-                render += "\x1b[1;%dm" % (30+1) + '@' + "\x1b[0m"
-            else:
-                render += '@'
-        elif column < image.shape[1] and image[row, column] <= threshold:
-            if row >= corner[0] and corner[0] + length > row and column >= corner[1] and corner[1] + length > column:
-                render += "\x1b[1;%dm" % (30+1) + '.' + "\x1b[0m"
-            else:
-                render += '.'
-        else:
-            render += ' '
-    return render
-
-def render_pairs(image1, image2, state, length, threshold, separator):
-    render = ''
-    for i in range(max(image1.shape[0], image2.shape[0])):
-        for j in range(image1.shape[1] + image2.shape[1] + 1):
-            if j < image1.shape[1]:
-                render = line_render(render, i, j, image1, state[0:2], length, threshold)
-            if j == image1.shape[1]:
-                render += separator
-            if j > image1.shape[1]:
-                render = line_render(render, i, j - image1.shape[1] - 1, image2, state[2:4], length, threshold)
-        render += '\n'
-    return render
-
 class MnistPairEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
@@ -110,8 +83,18 @@ class MnistPairEnv(gym.Env):
         self.action_space = spaces.Discrete(25)
         self.observation_space = spaces.Discrete((self.out_image_length - self.in_image_length + 1) ** 2)
 
-    def _step(self, action):
-        self.state += get_transition(action.item())
+        fig = plt.figure()
+        fig.add_axes([0, 0, 0.5, 1.0])
+        fig.add_axes([0.5, 0, 0.5, 1.0])
+        self.ax1 = fig.axes[0]
+        self.ax2 = fig.axes[1]
+        self.ax1.set_yticklabels([])
+        self.ax1.set_xticklabels([])
+        self.ax2.set_yticklabels([])
+        self.ax2.set_xticklabels([])
+
+    def step(self, action):
+        self.state += get_transition(action)
         self.current_step += 1
         np.clip(self.state, 0, self.out_image_length - self.in_image_length, out=self.state)
 
@@ -123,7 +106,7 @@ class MnistPairEnv(gym.Env):
             reward = -0.1
         return self.state, reward, self.current_step >= self.total_episode_steps, {}
 
-    def _reset(self):
+    def reset(self):
         self.state = np.array([0, 0, 0, 0])
         idx = np.random.randint(0, self.number_of_images)
         self.pair1 = makeTransMnist(self.mnist[idx, :], self.in_image_length, self.out_image_length)
@@ -131,5 +114,13 @@ class MnistPairEnv(gym.Env):
         self.current_step = 0
         return self.state, self.pair1, self.pair2
 
-    def _render(self, mode='human', close=False):
-        print render_pairs(self.pair1, self.pair2, self.state, self.in_image_length, 0, '|')
+    def render(self, mode='human', close=False):
+        plt.cla()
+        rect1 = Rectangle((self.state[1], self.state[0]), self.in_image_length, self.in_image_length, linewidth=1, edgecolor='r',facecolor='none')
+        rect2 = Rectangle((self.state[3], self.state[2]), self.in_image_length, self.in_image_length, linewidth=1, edgecolor='r',facecolor='none')
+        self.ax1.imshow(self.pair1, cmap='gray_r')
+        self.ax2.imshow(self.pair2, cmap='gray_r')
+        self.ax1.add_patch(rect1)
+        self.ax2.add_patch(rect2)
+        plt.draw()
+        plt.pause(0.001)
