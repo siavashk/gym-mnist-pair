@@ -104,7 +104,8 @@ class MnistPairEnv(gym.Env):
         reward = np.corrcoef(crop1.ravel(), crop2.ravel())[0, 1]
         if math.isnan(reward):
             reward = -0.1
-        return self.state, reward, self.current_step >= self.total_episode_steps, {}
+        observation = np.concatenate((np.ravel(crop1), np.ravel(crop2)))
+        return observation, reward, self.current_step >= self.total_episode_steps, {}
 
     def reset(self):
         self.state = np.array([0, 0, 0, 0])
@@ -112,7 +113,12 @@ class MnistPairEnv(gym.Env):
         self.pair1 = makeTransMnist(self.mnist[idx, :], self.in_image_length, self.out_image_length)
         self.pair2 = makeTransMnist(self.mnist[idx, :], self.in_image_length, self.out_image_length)
         self.current_step = 0
-        return self.state, self.pair1, self.pair2
+
+        crop1 = self.pair1[self.state[0]:self.state[0]+self.in_image_length, self.state[1]:self.state[1]+self.in_image_length]
+        crop2 = self.pair2[self.state[2]:self.state[2]+self.in_image_length, self.state[3]:self.state[3]+self.in_image_length]
+        observation = np.concatenate((np.ravel(crop1), np.ravel(crop2)))
+
+        return observation
 
     def render(self, mode='human', close=False):
         plt.cla()
