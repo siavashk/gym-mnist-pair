@@ -60,12 +60,12 @@ def load_mnist():
             images[i][:] = image_data[i * rows * cols:(i + 1) * rows * cols]
         return np.array(images)
 
-def makeTransMnist(image, inLength, outLength):
-    image = image.reshape(inLength, inLength)
-    topLeft = np.random.random_integers(low=0, high=outLength - inLength, size=2)
-    transNist = np.zeros((outLength, outLength))
-    transNist[topLeft[0]:topLeft[0]+inLength, topLeft[1]:topLeft[1]+inLength] = image
-    return transNist
+def randomize_trans_mnist(image, in_length, out_length):
+    image = image.reshape(in_length, in_length)
+    top_left = np.random.random_integers(low=0, high=out_length - in_length, size=2)
+    trans_mnist = np.zeros((out_length, out_length))
+    trans_mnist[top_left[0]:top_left[0] + in_length, top_left[1]:top_left[1] + in_length] = image
+    return trans_mnist, top_left
 
 class MnistPairEnv(gym.Env):
     metadata = {'render.modes': ['human']}
@@ -78,10 +78,11 @@ class MnistPairEnv(gym.Env):
         self.state = np.array([0, 0, 0, 0]) # format (top_left_1_x, top_left_1_y, top_left_2_x, top_left_2_y)
         self.total_episode_steps = 100
         self.current_step = 0
-        self.pair1 = makeTransMnist(self.mnist[0, :], self.in_image_length, self.out_image_length)
-        self.pair2 = makeTransMnist(self.mnist[0, :], self.in_image_length, self.out_image_length)
+        self.pair1, top_left1 = randomize_trans_mnist(self.mnist[0, :], self.in_image_length, self.out_image_length)
+        self.pair2, top_left2 = randomize_trans_mnist(self.mnist[0, :], self.in_image_length, self.out_image_length)
         self.action_space = spaces.Discrete(25)
         self.observation_space = spaces.Discrete((self.out_image_length - self.in_image_length + 1) ** 2)
+        self.solution = np.concatenate((top_left1, top_left2))
 
         fig = plt.figure()
         fig.add_axes([0, 0, 0.5, 1.0])
@@ -100,19 +101,24 @@ class MnistPairEnv(gym.Env):
 
         crop1 = self.pair1[self.state[0]:self.state[0]+self.in_image_length, self.state[1]:self.state[1]+self.in_image_length]
         crop2 = self.pair2[self.state[2]:self.state[2]+self.in_image_length, self.state[3]:self.state[3]+self.in_image_length]
-
-        reward = np.corrcoef(crop1.ravel(), crop2.ravel())[0, 1]
-        if math.isnan(reward):
-            reward = -0.1
         observation = np.concatenate((np.ravel(crop1), np.ravel(crop2)))
-        return observation, reward, self.current_step >= self.total_episode_steps, {}
+
+        if np.array_equal(self.state, self.solution):
+            reward = 100
+            return observation, reward, True, {}
+        else:
+            reward = np.corrcoef(crop1.ravel(), crop2.ravel())[0, 1]
+            if math.isnan(reward):
+                reward = -0.1
+            return observation, reward, self.current_step >= self.total_episode_steps, {}
 
     def reset(self):
         self.state = np.array([0, 0, 0, 0])
         idx = np.random.randint(0, self.number_of_images)
-        self.pair1 = makeTransMnist(self.mnist[idx, :], self.in_image_length, self.out_image_length)
-        self.pair2 = makeTransMnist(self.mnist[idx, :], self.in_image_length, self.out_image_length)
+        self.pair1, top_left1 = randomize_trans_mnist(self.mnist[idx, :], self.in_image_length, self.out_image_length)
+        self.pair2, top_left2 = randomize_trans_mnist(self.mnist[idx, :], self.in_image_length, self.out_image_length)
         self.current_step = 0
+        self.solution = np.concatenate((top_left1, top_left2))
 
         crop1 = self.pair1[self.state[0]:self.state[0]+self.in_image_length, self.state[1]:self.state[1]+self.in_image_length]
         crop2 = self.pair2[self.state[2]:self.state[2]+self.in_image_length, self.state[3]:self.state[3]+self.in_image_length]
