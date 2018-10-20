@@ -77,6 +77,8 @@ class MnistPairEnv(gym.Env):
         self.out_image_length = 40
         self.state = np.array([0, 0, 0, 0]) # format (top_left_1_x, top_left_1_y, top_left_2_x, top_left_2_y)
         self.total_episode_steps = 100
+        self.idle_discouragement = -0.1
+        self.solution_reward = 100
         self.current_step = 0
         self.pair1, top_left1 = randomize_trans_mnist(self.mnist[0, :], self.in_image_length, self.out_image_length)
         self.pair2, top_left2 = randomize_trans_mnist(self.mnist[0, :], self.in_image_length, self.out_image_length)
@@ -104,12 +106,11 @@ class MnistPairEnv(gym.Env):
         observation = np.concatenate((np.ravel(crop1), np.ravel(crop2)))
 
         if np.array_equal(self.state, self.solution):
-            reward = 100
-            return observation, reward, True, {}
+            return observation, self.solution_reward, True, {}
         else:
             reward = np.corrcoef(crop1.ravel(), crop2.ravel())[0, 1]
             if math.isnan(reward):
-                reward = -0.1
+                reward = self.idle_discouragement
             return observation, reward, self.current_step >= self.total_episode_steps, {}
 
     def reset(self):
