@@ -128,9 +128,10 @@ class MnistPairEnv(gym.Env):
         return observation
 
     def render(self, mode='human', close=False):
-        plt.cla()
         rect1 = Rectangle((self.state[1], self.state[0]), self.in_image_length, self.in_image_length, linewidth=1, edgecolor='r',facecolor='none')
         rect2 = Rectangle((self.state[3], self.state[2]), self.in_image_length, self.in_image_length, linewidth=1, edgecolor='r',facecolor='none')
+        self.ax1.clear()
+        self.ax2.clear()
         self.ax1.imshow(self.pair1, cmap='gray_r')
         self.ax2.imshow(self.pair2, cmap='gray_r')
         self.ax1.add_patch(rect1)
